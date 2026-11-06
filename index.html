@@ -191,22 +191,24 @@ margin-top:4px;
 border-color:#2563eb;
 box-shadow:0 0 0 1px #2563eb;
 }
-
 .keypad{
-margin-top:8px;
-display:grid;
-grid-template-columns:repeat(4,1fr);
-gap:4px;
+    margin-top: 8px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    width: 100%;
+    max-width: 100%;
 }
 .keypad button{
-padding:10px 0;
-font-size:20px;
-border:none;
-border-radius:6px;
-background:#00838f;
-color:#fff;
-font-weight:600;
+    padding: 10px 0;
+    font-size: 20px;
+    border: none;
+    border-radius: 6px;
+    background: #00838f;
+    color: #fff;
+    font-weight: 600;
 }
+
 .keypad button[data-action="clear"],
 .keypad button[data-action="ok"] {
     font-size: 16px; 
