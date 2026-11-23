@@ -733,7 +733,7 @@ text-align:left;
 
         <button onclick="copyDeviceID()" style="background:#6d28d9; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-size:14px; margin-bottom:20px; width:100%;">ID ကို ကော်ပီကူးပြီး ပိုင်ရှင်ထံပို့ရန်</button>
         
-        <p id="act-waiting" style="color:#f59e0b; font-size:14px; font-weight:bold;">⏳ ပိုင်ရှင်ထံမှ ခွင့်ပြုချက်ကို စောင့်ဆိုင်းနေပါသည်။</p>
+        <p id="act-waiting" style="color:#f59e0b; font-size:14px; font-weight:bold;"> ပိုင်ရှင်ထံမှ ခွင့်ပြုချက်ကို စောင့်ဆိုင်းနေပါသည်။</p>
     </div>
 </div>
 
@@ -791,7 +791,8 @@ text-align:left;
   <div id="commission-top-header" style="position: relative; width: 100%; height: 50px; background-color: white; border-bottom: 1px solid #ddd; display: block;">
     
     <button class="back-btn" onclick="openScreen('home')" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); z-index: 10;"> Back</button>
-        <div id="header-extra-controls" style="display:none; position: absolute; left: 85px; right: 12px; top: 50%; transform: translateY(-50%); align-items: center; justify-content: space-between; gap: 6px;">
+
+    <div id="header-extra-controls" style="display:none; position: absolute; left: 85px; right: 15px; top: 50%; transform: translateY(-50%); align-items: center; justify-content: space-between;">
         <div style="text-align: center; width: 60px; flex-shrink: 0;">
             <span style="font-size: 10px; display: block; color: #6d28d9; line-height: 1; white-space: nowrap;">အပိုစောင်း %</span>
             <input type="number" id="extra-percent" value="0" oninput="updateExtraPercent()" 
@@ -802,7 +803,7 @@ text-align:left;
             Paste
         </button>
 
-                <div id="patient-title-in-header" style="font-weight: bold; color: #6d28d9; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75px; text-align: right;"></div>
+        <div id="patient-title-in-header" style="font-weight: bold; color: #6d28d9; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; text-align: right;"></div>
     </div>
   </div>
   
@@ -983,7 +984,7 @@ text-align:left;
 
 <div class="screen" id="screen-checker">
   <div style="position:fixed; top:0; left:0; right:0; background:#fff; z-index:100; padding:15px; display:flex; align-items:center; border-bottom:1px solid #eee;">
-    <button onclick="openScreen('home')" style="background:#f1f5f9; border:none; padding:8px 12px; border-radius:8px; color:#64748b; font-weight:bold;"> ← Back </button>
+    <button onclick="openScreen('home')" style="background:#f1f5f9; border:none; padding:8px 12px; border-radius:8px; color:#64748b; font-weight:bold;">  Back </button>
     <div style="flex-grow:1; text-align:center; font-size:18px; font-weight:bold; color:#db2777; margin-right:60px;">ပေါက်သီးစစ်ဆေးခြင်း</div>
   </div>
 
@@ -1128,14 +1129,9 @@ async function saveState() {
     };
     try {
         let db = await openDB();
-        await new Promise((resolve, reject) => {
-            let tx = db.transaction(STORE_NAME, "readwrite");
-            let store = tx.objectStore(STORE_NAME);
-            store.put(state, "current_data");
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-            tx.onabort = () => reject(tx.error);
-        });
+        let tx = db.transaction(STORE_NAME, "readwrite");
+        let store = tx.objectStore(STORE_NAME);
+        store.put(state, "current_data");
     } catch (e) {
         console.error("Save error:", e);
     }
@@ -1227,6 +1223,7 @@ currentLanguage = lang;
 applyLanguage();
 saveState();
 }
+
 /* ---------- NAV ---------- */
 function openScreen(name){
 var screens=document.getElementsByClassName("screen");
@@ -1241,13 +1238,10 @@ if(name==="commission"){
 }
 if(name==="vouchers") renderVouchers(vouchers, false);
 if(name==="vouchers-sent") renderVouchers(sentVouchers, true);
-if(name==="vouchers-sent") toggleSentView('sales');
 if(name==="text-vouchers") renderTextVouchers();
 if(name==="history") renderHistory();
 if(name==="numbers") updateNumberGroupsScreen();
 }
-
-
 
 /* ---------- PATIENTS & PER-PATIENT EXTRA PERCENT ---------- */
 function updateExtraPercent() {
@@ -1265,7 +1259,7 @@ var name=input.value.trim();
 if(!name){ alert("ကော်မရှင် နာမည် ထည့်ပါ"); return; }
 patients.push(name);
 patientsData.push({ extraPercent: 0 });
-recordsByIndex.push([]);
+recordsByIndex[patients.length-1]=[];
 input.value="";
 renderPatients();
 saveState();
@@ -1474,6 +1468,7 @@ function recalculateAutoGroups(){
     });
 
     updateNumberGroupsScreen();
+    saveState();
 }
 
 function addToAutoGroups(number, v1, v2, pExtraPercent, shouldSave = true) {
@@ -1578,7 +1573,7 @@ function updateNumberGroupsScreen(){
     let lInp = document.getElementById('current-group-limit');
     if(lInp) lInp.value = currentLimit || "";
 
-    const titles = { 1: "သုံးလုံး ဒဲ့", 2: "သုံးလုံး တွတ်", 3: "နှစ်လုံး ပေါ်", 4: "နှစ်လုံး အောက်", 5: "ဝက်ရော်" };
+    const titles = { 1: "သုံးလုံး ဒဲ့", 2: "သုံးလုံး တွတ်", 3: "နှစ်လုံး ပေါ်", 4: "နှစ်လုံး အောက်" };
     let activeTitle = titles[activeGroupTab];
     
     let totals = getLiveTotals(activeGroupTab);
@@ -1644,7 +1639,6 @@ finishAdd();
 
 function finishAdd(){
     recalculateAutoGroups();
-    saveState();
     document.getElementById("num").value="";
     setActiveNumberInput(document.getElementById("num"));
     renderRecords();
@@ -1762,7 +1756,7 @@ function makeVoucher(){
         let is2D = (r.number.toString().length === 2);
         let v1_val = r.v1 ? Number(r.v1).toLocaleString() : "";
         let v1_lab = (is2D && r.v1) ? "(ပေါ်)" : "";
-        let x_sign = (r.v1 && r.v2) ? "×" : "";
+        let x_sign = (r.v1 && r.v2) ? "" : "";
         let v2_val = r.v2 ? Number(r.v2).toLocaleString() : "";
         let v2_lab = (is2D && r.v2) ? "(အောက်)" : "";
 
@@ -1816,7 +1810,7 @@ function makeVoucher(){
         document.getElementById("buyer-name").value = "";
         renderRecords();
         recalculateAutoGroups();
-        saveState();
+        wrap.style.display = "none";
         alert("ဘောင်ချာ အသစ် ထုတ်ပြီးပါပြီ။");
     });
 }
@@ -1863,19 +1857,16 @@ function updateBtnState(isSent){
 function deleteSingleVoucher(idx,isSent){
     if(!confirm("ဖျက်မလား?")) return;
     if(isSent) sentVouchers.splice(idx,1); else vouchers.splice(idx,1);
-    recalculateAutoGroups();
-    saveState();
-    renderVouchers(isSent?sentVouchers:vouchers, isSent);
+    recalculateAutoGroups(); renderVouchers(isSent?sentVouchers:vouchers, isSent);
 }
 
-async function moveSelectedVouchers(){
+function moveSelectedVouchers(){
     if (!confirm("ရွေးချယ်ထားသော ဘောင်ချာများကို မှတ်တမ်းထဲသို့ ရွှေ့မှာ သေချာပါသလား?")) return;
     selectedVoucherIndexes.sort((a,b)=>b-a).forEach(i => {
         sentVouchers.unshift(vouchers.splice(i,1)[0]);
     });
     selectedVoucherIndexes=[]; 
     recalculateAutoGroups(); 
-    await saveState();
     renderVouchers(vouchers, false);
     alert("မှတ်တမ်းထဲသို့ အောင်မြင်စွာ ရွှေ့ပြောင်းပြီးပါပြီ။");
 }
@@ -2040,7 +2031,7 @@ function renderHistory() {
                     <span style="font-size:11px; color:#94a3b8;">${g.createdAt}</span>
                 </div>
             </div>
-            <div style="color:#6d28d9; font-size:20px;">▾</div>
+            <div style="color:#6d28d9; font-size:20px;"></div>
         `;
         
         let content = g[targetCol] || "";
@@ -2067,7 +2058,7 @@ function renderHistory() {
 
             <div style="display:flex; gap:6px; margin-top:10px;">
                 <button onclick="secureCopy('hist_at_${realIdx}')" style="flex:1; background:#059669; color:white; border:none; padding:8px 6px; border-radius:6px; font-size:12px; font-weight:bold;">Copy</button>
-                <button onclick="exportHistoryAsImage('${g.fileNumber}', '${g.groupTitle}', document.getElementById('hist_at_${realIdx}').value, '${g.createdAt}')" style="flex:1; background:#db2777; color:white; border:none; padding:8px 6px; border-radius:6px; font-size:12px; font-weight:bold;">📷 ပုံထုတ်</button>
+                <button onclick="exportHistoryAsImage('${g.fileNumber}', '${g.groupTitle}', document.getElementById('hist_at_${realIdx}').value, '${g.createdAt}')" style="flex:1; background:#db2777; color:white; border:none; padding:8px 6px; border-radius:6px; font-size:12px; font-weight:bold;"> ပုံထုတ်</button>
                 <button onclick="shareHistoryData('${g.groupTitle}', 'hist_at_${realIdx}', ${sum})" style="flex:1; background:#3b82f6; color:white; border:none; padding:8px 6px; border-radius:6px; font-size:12px; font-weight:bold;">Share</button>
             </div>
         `;
@@ -2102,12 +2093,11 @@ function toggleSentView(viewType) {
 function renderSalesSummary() {
     const listDiv = document.getElementById('sales-ledger-list');
     listDiv.innerHTML = "";
-        if (sentVouchers.length === 0 && textVouchers.length === 0) {
+    if (sentVouchers.length === 0) {
         listDiv.innerHTML = "<div style='text-align:center; padding:40px; color:#94a3b8;'>ဖိုင်တွဲများ မရှိသေးပါ</div>";
         return;
     }
     let summary = {};
-
     sentVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
         if (!summary[pName]) summary[pName] = { items: [], totalAmount: 0 };
@@ -2115,41 +2105,17 @@ function renderSalesSummary() {
         summary[pName].items.push({ buyer: v.buyerName, amount: amt, date: v.dateStr });
         summary[pName].totalAmount += amt;
     });
-
-    textVouchers.forEach(tv => {
-        let pName = tv.patientName || patients[tv.patientIndex] || "အမည်မသိ";
-        if (!summary[pName]) summary[pName] = { items: [], totalAmount: 0 };
-        let tvTotal = 0;
-        if (tv.rows && tv.rows.length > 0) {
-            tv.rows.forEach(r => {
-                tvTotal += (parseFloat(r.v1) || 0) + (parseFloat(r.v2) || 0);
-            });
-        } else if (tv.content) {
-            tv.content.split('\n').forEach(line => {
-                let parts = line.split(/[\=\-\:]/);
-                if (parts.length >= 2) {
-                    tvTotal += parseFloat(parts[1].trim()) || 0;
-                }
-            });
-        }
-        summary[pName].items.push({
-            buyer: tv.groupName ? `Paste (${tv.groupName})` : "Paste စာရင်း",
-            amount: tvTotal,
-            date: tv.dateStr
-        });
-        summary[pName].totalAmount += tvTotal;
-    });
     for (let pName in summary) {
         let group = summary[pName];
         let folder = document.createElement('div');
         folder.style = "background:white; border:1px solid #d1d5db; border-radius:8px; margin-bottom:10px; overflow:hidden;";
-        let shareText = `📂 ${pName} ၏ စာရင်း\n` + group.items.map(i => `▪️ ${i.buyer}: ${i.amount.toLocaleString()}`).join('\n') + `\n\nစုစုပေါင်း: ${group.totalAmount.toLocaleString()}`;
+        let shareText = ` ${pName} ၏ စာရင်း\n` + group.items.map(i => ` ${i.buyer}: ${i.amount.toLocaleString()}`).join('\n') + `\n\nစုစုပေါင်း: ${group.totalAmount.toLocaleString()}`;
         
         folder.innerHTML = `
             <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'" 
                  style="padding:15px; background:#f3f4f6; display:flex; justify-content:space-between; cursor:pointer;">
-                <div style="font-weight:bold;">📂 ${pName} (${group.items.length} ဖိုင်)</div>
-                <div style="color:#6d28d9;">${group.totalAmount.toLocaleString()} ▾</div>
+                <div style="font-weight:bold;"> ${pName} (${group.items.length} ဖိုင်)</div>
+                <div style="color:#6d28d9;">${group.totalAmount.toLocaleString()} </div>
             </div>
             <div style="display:none; padding:10px; border-top:1px solid #eee;">
                 ${group.items.map(i => `<div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #f9fafb;"><span>${i.buyer}</span><b>${i.amount.toLocaleString()}</b></div>`).join('')}
@@ -2202,13 +2168,13 @@ window.addEventListener('load', () => {
 });
 
 function check3DWinners(showMsg = true) {
-        let winNum = document.getElementById("win-3d").value.trim();
+    let winNum = document.getElementById("win-3d").value;
     if (winNum.length !== 3) { if(showMsg) alert("၃ လုံးဂဏန်းရိုက်ပါ"); return; }
     
     localStorage.setItem('lastWin3D', winNum);
     let perms = getPermutationsOf3(winNum); 
     let winners = {};
-        let allVouchers = [...vouchers, ...sentVouchers];
+    let allVouchers = [...vouchers, ...sentVouchers];
 
     allVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
@@ -2218,28 +2184,18 @@ function check3DWinners(showMsg = true) {
             if (perms.includes(row.number.toString()) && row.v2) winners[pName].toot += parseInt(row.v2);
         });
     });
-
-    textVouchers.forEach(tv => {
-        let pName = tv.patientName || patients[tv.patientIndex] || "အမည်မသိ";
-        if (!winners[pName]) winners[pName] = { direct: 0, toot: 0 };
-        (tv.rows || []).forEach(row => {
-            if (row.number == winNum && row.v1) winners[pName].direct += parseInt(row.v1);
-            if (perms.includes(row.number.toString()) && row.v2) winners[pName].toot += parseInt(row.v2);
-        });
-    });
-
     displayStyledResults(winners, "3D", "winning-results-area-3d");
 }
 
 function check2DWinners(showMsg = true) {
-        let top = document.getElementById("win-2d-top").value.trim();
-    let bottom = document.getElementById("win-2d-bottom").value.trim();
+    let top = document.getElementById("win-2d-top").value;
+    let bottom = document.getElementById("win-2d-bottom").value;
     
     localStorage.setItem('lastWin2DTop', top);
     localStorage.setItem('lastWin2DBottom', bottom);
     
     let winners = {};
-        let allVouchers = [...vouchers, ...sentVouchers];
+    let allVouchers = [...vouchers, ...sentVouchers];
 
     allVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
@@ -2249,16 +2205,6 @@ function check2DWinners(showMsg = true) {
             if (bottom && row.number == bottom && row.v2) winners[pName].bottom += parseInt(row.v2);
         });
     });
-
-    textVouchers.forEach(tv => {
-        let pName = tv.patientName || patients[tv.patientIndex] || "အမည်မသိ";
-        if (!winners[pName]) winners[pName] = { top: 0, bottom: 0 };
-        (tv.rows || []).forEach(row => {
-            if (top && row.number == top && row.v1) winners[pName].top += parseInt(row.v1);
-            if (bottom && row.number == bottom && row.v2) winners[pName].bottom += parseInt(row.v2);
-        });
-    });
-
     displayStyledResults(winners, "2D", "winning-results-area-2d");
 }
 
@@ -2461,14 +2407,14 @@ function showMultiImagePreviewModal(pages, groupTitle, fileNumber) {
         <div style="background:white; border-radius:14px; width:100%; max-width:420px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 25px rgba(0,0,0,0.3);">
             <div style="padding:12px 16px; background:#6d28d9; color:white; font-weight:bold; display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:15px;">ပုံများ ကြည့်ရှုခြင်း (${pages.length} ပုံ)</span>
-                <button onclick="document.getElementById('image-preview-modal').remove()" style="background:none; border:none; color:white; font-size:18px; cursor:pointer; font-weight:bold;">✕</button>
+                <button onclick="document.getElementById('image-preview-modal').remove()" style="background:none; border:none; color:white; font-size:18px; cursor:pointer; font-weight:bold;"></button>
             </div>
             <div style="padding:15px; overflow-y:auto; flex-grow:1; text-align:center; background:#f1f5f9;">
                 ${imagesHTML}
             </div>
             <div style="padding:12px 16px; background:white; border-top:1px solid #e2e8f0; display:flex; gap:10px;">
                 <button id="modal-close-btn" style="flex:1; background:#9ca3af; color:white; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">ပိတ်မည်</button>
-                <button id="modal-share-btn" style="flex:2; background:#059669; color:white; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;">📤 ပုံအားလုံး ပို့မည် (${pages.length} ပုံ)</button>
+                <button id="modal-share-btn" style="flex:2; background:#059669; color:white; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:14px;"> ပုံအားလုံး ပို့မည် (${pages.length} ပုံ)</button>
             </div>
         </div>
     `;
@@ -2533,17 +2479,7 @@ function showMultiImagePreviewModal(pages, groupTitle, fileNumber) {
 
   const myDeviceID = getPersistentDeviceID();
 
-    function copyDeviceID() {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(myDeviceID)
-              .then(() => alert("Device ID ကို ကော်ပီကူးပြီးပါပြီ။"))
-              .catch(() => fallbackCopyDeviceID());
-      } else {
-          fallbackCopyDeviceID();
-      }
-  }
-
-  function fallbackCopyDeviceID() {
+  function copyDeviceID() {
       const el = document.createElement('textarea');
       el.value = myDeviceID;
       document.body.appendChild(el);
@@ -2552,7 +2488,6 @@ function showMultiImagePreviewModal(pages, groupTitle, fileNumber) {
       document.body.removeChild(el);
       alert("Device ID ကို ကော်ပီကူးပြီးပါပြီ။");
   }
-
 
   function startAuthListener() {
       const idDisplay = document.getElementById('display-device-id');
