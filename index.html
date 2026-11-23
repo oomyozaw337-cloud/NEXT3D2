@@ -1870,7 +1870,7 @@ function deleteSingleVoucher(idx,isSent){
     renderVouchers(isSent?sentVouchers:vouchers, isSent);
 }
 
-function moveSelectedVouchers(){
+async function moveSelectedVouchers(){
     if (!confirm("ရွေးချယ်ထားသော ဘောင်ချာများကို မှတ်တမ်းထဲသို့ ရွှေ့မှာ သေချာပါသလား?")) return;
     selectedVoucherIndexes.sort((a,b)=>b-a).forEach(i => {
         sentVouchers.unshift(vouchers.splice(i,1)[0]);
@@ -1881,6 +1881,7 @@ function moveSelectedVouchers(){
     renderVouchers(vouchers, false);
     alert("မှတ်တမ်းထဲသို့ အောင်မြင်စွာ ရွှေ့ပြောင်းပြီးပါပြီ။");
 }
+
 function shareSelectedVouchers(){
     var files = selectedVoucherIndexes.map(i => {
         var v=vouchers[i], arr=v.img.split(','), mime=arr[0].match(/:(.*?);/)[1], bstr=atob(arr[1]), n=bstr.length, u8=new Uint8Array(n);
