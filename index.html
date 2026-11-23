@@ -1227,7 +1227,6 @@ currentLanguage = lang;
 applyLanguage();
 saveState();
 }
-
 /* ---------- NAV ---------- */
 function openScreen(name){
 var screens=document.getElementsByClassName("screen");
@@ -1240,15 +1239,14 @@ if(name==="commission"){
     current = null;
     renderPatients(); 
 }
-if(name==="vouchers") {
-    selectedVoucherIndexes = [];
-    renderVouchers(vouchers, false);
-}
+if(name==="vouchers") renderVouchers(vouchers, false);
+if(name==="vouchers-sent") renderVouchers(sentVouchers, true);
 if(name==="vouchers-sent") toggleSentView('sales');
 if(name==="text-vouchers") renderTextVouchers();
 if(name==="history") renderHistory();
 if(name==="numbers") updateNumberGroupsScreen();
 }
+
 
 
 /* ---------- PATIENTS & PER-PATIENT EXTRA PERCENT ---------- */
