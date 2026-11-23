@@ -34,6 +34,11 @@ body, html {
     overscroll-behavior-y: contain; 
 }
 .screen.active{ display: block; }
+#screen-commission.active,
+#screen-numbers.active{
+    display: flex;
+    flex-direction: column;
+}
 #screen-home.active {
     height: 100vh;
     overflow-y: auto;
@@ -138,9 +143,11 @@ font-size:15px;
 
 .pills{ margin-top:8px; }
 .pill{
-display:inline-block;
-font-size:18px;
-padding:10px 16px;
+display:inline-flex;
+align-items:center;
+gap:6px;
+font-size:16px;
+padding:8px 12px;
 border-radius:999px;
 background:#d1fae5; 
 color:#047857; 
@@ -151,6 +158,22 @@ border:1px solid #6ee7b7;
 .pill.active{
 background:#10b981; 
 color:white;
+}
+.pill-name{
+cursor:pointer;
+}
+.pill-action{
+background:rgba(255,255,255,0.85);
+color:#1f2937;
+border:none;
+border-radius:999px;
+padding:2px 7px;
+font-size:11px;
+font-weight:700;
+}
+.pill-action.del{
+background:#fee2e2;
+color:#b91c1c;
 }
 
 .small-label{
@@ -1065,7 +1088,8 @@ var group2_v1 = [];
 var group2_v2 = [];
 var activeNumberInput = null;
 var currentLanguage = "my";
-var selectedVoucherIndexes = [];
+var selectedVoucherIds = [];
+var isMakingVoucher = false;
 
 var activeGroupTab = 1;
 var groupLimits = { col1: 0, col2: 0, col3: 0, col4: 0 };
@@ -1079,6 +1103,8 @@ document.getElementById("entry-date").innerText = now.toLocaleDateString("en-GB"
 document.getElementById("entry-date-small").innerText = now.toLocaleDateString("en-GB"); 
 }
 function getPermutationsOf3(s){
+s = String(s || "").trim();
+if (s.length !== 3) return [];
 var a=s[0],b=s[1],c=s[2];
 var arr=[a+b+c,a+c+b,b+a+c,b+c+a,c+a+b,c+b+a];
 var seen={},out=[];
@@ -1088,7 +1114,17 @@ if(!seen[arr[i]]){ seen[arr[i]]=true; out.push(arr[i]); }
 return out;
 }
 function perm2(s){
+s = String(s || "").trim();
+if (s.length !== 2) return [];
 return s[0]===s[1] ? [s] : [s, s[1]+s[0]];
+}
+function ensureVoucherIds(list){
+if (!Array.isArray(list)) return;
+for (var i = 0; i < list.length; i++){
+    if (!list[i].id){
+        list[i].id = "v_" + Date.now() + "_" + i + "_" + Math.random().toString(36).substr(2, 6);
+    }
+}
 }
 
 /* ---------- INDEXEDDB PERSISTENCE ---------- */
@@ -1154,18 +1190,23 @@ async function loadState() {
                         patientsData.push({ extraPercent: 0 });
                     }
                     recordsByIndex = st.recordsByIndex || [];
+                    while(recordsByIndex.length < patients.length) {
+                        recordsByIndex.push([]);
+                    }
                     vouchers = st.vouchers || [];
                     sentVouchers = st.sentVouchers || [];
+                    ensureVoucherIds(vouchers);
+                    ensureVoucherIds(sentVouchers);
                     textVouchers = st.textVouchers || [];
                     numberGroups = st.numberGroups || [];
-                    current = (typeof st.current === "number") ? st.current : null;
+                    current = (typeof st.current === "number" && st.current >= 0 && st.current < patients.length) ? st.current : null;
                     group3_v1 = st.group3_v1 || [];
                     group3_v2 = st.group3_v2 || [];
                     group2_v1 = st.group2_v1 || [];
                     group2_v2 = st.group2_v2 || [];
                     currentLanguage = st.language || "my";
                     groupLimits = st.groupLimits || { col1: 0, col2: 0, col3: 0, col4: 0 };
-                    halfPayList = st.halfPayList || [];
+                    halfPayList = (st.halfPayList || []).map(x => String(x).trim()).filter(Boolean);
                     
                     if(document.getElementById("half-pay-input")) {
                         document.getElementById("half-pay-input").value = halfPayList.join(', ');
@@ -1174,7 +1215,7 @@ async function loadState() {
                     applyLanguage();
                     renderPatients();
                     renderTextVouchers();
-                    recalculateAutoGroups();
+                    recalculateAutoGroups(false);
                     renderHistory();
                     if(current !== null && patients[current]) selectPatient(current);
                 }
@@ -1190,6 +1231,9 @@ async function loadState() {
 async function resetAll() {
     if (confirm("ဒေတာ အားလုံး ဖျက်မလား?")) {
         try {
+            localStorage.removeItem('lastWin3D');
+            localStorage.removeItem('lastWin2DTop');
+            localStorage.removeItem('lastWin2DBottom');
             let db = await openDB();
             let tx = db.transaction(STORE_NAME, "readwrite");
             tx.objectStore(STORE_NAME).clear();
@@ -1206,12 +1250,34 @@ window.addEventListener('scroll', function() {
     }
 }, { passive: true });
 
-window.onload = async function(){ 
-    setToday(); 
-    await loadState(); 
-    setupKeypad(); 
-    openScreen('home'); 
-};
+function restoreSavedWinners(){
+    const s3d = localStorage.getItem('lastWin3D');
+    const s2dT = localStorage.getItem('lastWin2DTop');
+    const s2dB = localStorage.getItem('lastWin2DBottom');
+
+    if (s3d && document.getElementById("win-3d")) {
+        document.getElementById("win-3d").value = s3d;
+        check3DWinners(false);
+    }
+    if ((s2dT || s2dB) && document.getElementById("win-2d-top")) {
+        document.getElementById("win-2d-top").value = s2dT || "";
+        document.getElementById("win-2d-bottom").value = s2dB || "";
+        check2DWinners(false);
+    }
+}
+
+async function initApp() {
+    setToday();
+    setupKeypad();
+    await loadState();
+    restoreSavedWinners();
+    openScreen('home');
+    startAuthListener();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    initApp();
+});
 
 /* ---------- SETTINGS ---------- */
 function applyLanguage(){
@@ -1250,7 +1316,7 @@ function updateExtraPercent() {
     if (!patientsData[current]) patientsData[current] = {};
     patientsData[current].extraPercent = val;
     saveState();
-    recalculateAutoGroups();
+    recalculateAutoGroups(false);
 }
 
 function addPatient(){
@@ -1265,15 +1331,84 @@ renderPatients();
 saveState();
 }
 
+function editPatient(idx, event){
+if (event) event.stopPropagation();
+var currentName = patients[idx];
+var newName = prompt("ကော်မရှင် နာမည် အသစ် ရိုက်ထည့်ပါ:", currentName);
+if (newName === null) return;
+newName = newName.trim();
+if (!newName){ alert("နာမည် ထည့်သွင်းပါ"); return; }
+patients[idx] = newName;
+textVouchers.forEach(tv => {
+    if (tv.patientIndex === idx) tv.patientName = newName;
+});
+if (current === idx){
+    document.getElementById("patient-title-in-header").innerText = newName;
+}
+renderPatients();
+saveState();
+}
+
+function deletePatient(idx, event){
+if (event) event.stopPropagation();
+if (!confirm('"' + patients[idx] + '" ကော်မရှင်နာမည်နှင့် သက်ဆိုင်သော စာရင်းများကို ဖျက်မှာ သေချာပါသလား?')) return;
+
+patients.splice(idx, 1);
+patientsData.splice(idx, 1);
+recordsByIndex.splice(idx, 1);
+
+vouchers = vouchers.filter(v => v.patientIndex !== idx).map(v => {
+    if (v.patientIndex > idx) v.patientIndex -= 1;
+    return v;
+});
+sentVouchers = sentVouchers.filter(v => v.patientIndex !== idx).map(v => {
+    if (v.patientIndex > idx) v.patientIndex -= 1;
+    return v;
+});
+textVouchers = textVouchers.filter(tv => tv.patientIndex !== idx).map(tv => {
+    if (tv.patientIndex > idx) tv.patientIndex -= 1;
+    return tv;
+});
+
+if (current === idx){
+    current = null;
+    document.getElementById("commission-selection-card").style.display="block";
+    document.getElementById("records-section").style.display="none";
+    document.getElementById("header-extra-controls").style.display="none";
+} else if (typeof current === "number" && current > idx){
+    current -= 1;
+}
+
+renderPatients();
+recalculateAutoGroups(true);
+}
+
 function renderPatients(){
 var list=document.getElementById("patient-list");
 list.innerHTML="";
 for(var i=0;i<patients.length;i++){
-var span=document.createElement("span");
-span.className="pill"+(current===i?" active":"");
-span.innerText=patients[i];
-span.onclick=(function(idx){ return function(){ selectPatient(idx); }; })(i);
-list.appendChild(span);
+var pill=document.createElement("span");
+pill.className="pill"+(current===i?" active":"");
+
+var nameSpan=document.createElement("span");
+nameSpan.className="pill-name";
+nameSpan.innerText=patients[i];
+nameSpan.onclick=(function(idx){ return function(){ selectPatient(idx); }; })(i);
+
+var editBtn=document.createElement("button");
+editBtn.className="pill-action";
+editBtn.innerText="ပြင်";
+editBtn.onclick=(function(idx){ return function(e){ editPatient(idx, e); }; })(i);
+
+var delBtn=document.createElement("button");
+delBtn.className="pill-action del";
+delBtn.innerText="ဖျက်";
+delBtn.onclick=(function(idx){ return function(e){ deletePatient(idx, e); }; })(i);
+
+pill.appendChild(nameSpan);
+pill.appendChild(editBtn);
+pill.appendChild(delBtn);
+list.appendChild(pill);
 }
 }
 
@@ -1326,7 +1461,6 @@ function processPastedText() {
     let commName = patients[current] || "";
     let lines = text.split('\n');
     let parsedRows = [];
-    let pExtra = (current !== null && patientsData[current]) ? (patientsData[current].extraPercent || 0) : 0;
 
     lines.forEach(line => {
         let cleanLine = line.trim();
@@ -1346,7 +1480,6 @@ function processPastedText() {
                 else if(groupName === "ဝက်ရော်") { v1 = val; }
 
                 parsedRows.push({ number: num, v1: v1, v2: v2 });
-                addToAutoGroups(num, v1, v2, pExtra, false);
             }
         }
     });
@@ -1367,8 +1500,7 @@ function processPastedText() {
 
     textVouchers.unshift(textVoucherObj);
     closePasteModal();
-    recalculateAutoGroups(); 
-    saveState();
+    recalculateAutoGroups(true);
     renderTextVouchers();
     updateNumberGroupsScreen();
     alert("အုပ်စု (" + groupName + ") ဆီသို့ ဂဏန်းစာရင်းများ အောင်မြင်စွာ ဝင်ရောက်သွားပါပြီ။");
@@ -1429,14 +1561,14 @@ function renderTextVouchers() {
 function deleteTextVoucher(idx) {
     if(confirm("ဒီ Text ဘောင်ချာကို ဖျက်မှာ သေချာပါသလား?")) {
         textVouchers.splice(idx, 1);
-        saveState();
+        recalculateAutoGroups(true);
         renderTextVouchers();
         alert("ဖျက်ပြီးပါပြီ။");
     }
 }
 
 /* ---------- RECORDS + KEYPAD ---------- */
-function recalculateAutoGroups(){
+function recalculateAutoGroups(shouldSave = true){
     group3_v1=[]; group3_v2=[]; group2_v1=[]; group2_v2=[];
 
     vouchers.forEach(function(v){
@@ -1468,23 +1600,24 @@ function recalculateAutoGroups(){
     });
 
     updateNumberGroupsScreen();
-    saveState();
+    if (shouldSave) saveState();
 }
 
-function addToAutoGroups(number, v1, v2, pExtraPercent, shouldSave = true) {
+function addToAutoGroups(number, v1, v2, pExtraPercent, shouldSave = false) {
+    number = String(number || "").trim();
     var len = number.length;
     
     if (len === 3) {
-        if (v1 !== null && !isNaN(v1)) {
+        if (v1 !== null && v1 !== undefined && !isNaN(v1)) {
             let markupValue = v1 + (v1 * pExtraPercent / 100);
             group3_v1.push(number + "=" + markupValue);
         }
-        if (v2 !== null && !isNaN(v2)) {
+        if (v2 !== null && v2 !== undefined && !isNaN(v2)) {
             group3_v2.push(number + "=" + v2);
         }
     } else if (len === 2) {
-        if (v1 !== null && !isNaN(v1)) group2_v1.push(number + "=" + v1);
-        if (v2 !== null && !isNaN(v2)) group2_v2.push(number + "=" + v2);
+        if (v1 !== null && v1 !== undefined && !isNaN(v1)) group2_v1.push(number + "=" + v1);
+        if (v2 !== null && v2 !== undefined && !isNaN(v2)) group2_v2.push(number + "=" + v2);
     }
 
     if (shouldSave) { 
@@ -1496,13 +1629,12 @@ function addToAutoGroups(number, v1, v2, pExtraPercent, shouldSave = true) {
 function saveHalfPayList() {
     let input = document.getElementById("half-pay-input").value;
     halfPayList = input.split(',').map(n => n.trim()).filter(n => n !== "");
-    saveState();
-    recalculateAutoGroups();
+    recalculateAutoGroups(true);
     alert("လျော့ဂဏန်းများ သိမ်းဆည်းပြီးပါပြီ။");
 }
 
 function isHalfPay(num) {
-    return halfPayList.includes(num.toString());
+    return halfPayList.includes(String(num || "").trim());
 }
 
 /* ---------- LIMIT & GROUP SCREEN LOGIC ---------- */
@@ -1515,7 +1647,7 @@ function switchGroupTab(num) {
 }
 
 function updateLimitValue(val) {
-    groupLimits['col' + activeGroupTab] = parseInt(val) || 0;
+    groupLimits['col' + activeGroupTab] = parseInt(val, 10) || 0;
     saveState();
     updateNumberGroupsScreen();
 }
@@ -1527,8 +1659,10 @@ function getLiveTotals(tabNum) {
     
     if (tabNum < 5) {
         (groupMap[tabNum] || []).forEach(item => {
-            let [num, val] = item.split('=');
-            let value = parseFloat(val) || 0;
+            let [rawNum, rawVal] = item.split('=');
+            let num = String(rawNum || "").trim();
+            let value = parseFloat(rawVal) || 0;
+            if (!num) return;
             
             if (tabNum === 1) {
                 if (!isHalfPay(num)) {
@@ -1540,9 +1674,10 @@ function getLiveTotals(tabNum) {
         });
     } else {
         (groupMap[1] || []).forEach(item => {
-            let [num, val] = item.split('=');
-            if (isHalfPay(num)) {
-                totals[num] = (totals[num] || 0) + (parseFloat(val) || 0);
+            let [rawNum, rawVal] = item.split('=');
+            let num = String(rawNum || "").trim();
+            if (num && isHalfPay(num)) {
+                totals[num] = (totals[num] || 0) + (parseFloat(rawVal) || 0);
             }
         });
     }
@@ -1551,8 +1686,10 @@ function getLiveTotals(tabNum) {
         let historyData = g[colKey] || "";
         if (historyData) {
             historyData.split('\n').forEach(line => {
-                let [num, val] = line.split('=');
-                if (num && val) totals[num] = (totals[num] || 0) - parseFloat(val);
+                let [rawNum, rawVal] = line.split('=');
+                let num = String(rawNum || "").trim();
+                let val = parseFloat(rawVal);
+                if (num && !isNaN(val)) totals[num] = (totals[num] || 0) - val;
             });
         }
     });
@@ -1573,7 +1710,7 @@ function updateNumberGroupsScreen(){
     let lInp = document.getElementById('current-group-limit');
     if(lInp) lInp.value = currentLimit || "";
 
-    const titles = { 1: "သုံးလုံး ဒဲ့", 2: "သုံးလုံး တွတ်", 3: "နှစ်လုံး ပေါ်", 4: "နှစ်လုံး အောက်" };
+    const titles = { 1: "သုံးလုံး ဒဲ့", 2: "သုံးလုံး တွတ်", 3: "နှစ်လုံး ပေါ်", 4: "နှစ်လုံး အောက်", 5: "ဝက်ရော်" };
     let activeTitle = titles[activeGroupTab];
     
     let totals = getLiveTotals(activeGroupTab);
@@ -1610,6 +1747,7 @@ function updateNumberGroupsScreen(){
 
 function addRecord(){
 if(current===null){ alert("အရင် ကော်မရှင် နာမည်ရွေးပါ"); return; }
+if(!Array.isArray(recordsByIndex[current])) recordsByIndex[current] = [];
 var num=document.getElementById("num").value.trim();
 var v1Text=document.getElementById("v1").value.trim();
 var v2Text=document.getElementById("v2").value.trim();
@@ -1620,10 +1758,12 @@ function handleSlash(target){
     if(!txt || txt.indexOf("/")===-1) return false;
     var parts = txt.split("/");
     var f=parseInt(parts[0],10), s=parseInt(parts[1],10);
+    if (isNaN(f) && isNaN(s)) return false;
     var perms = (num.length===3) ? getPermutationsOf3(num) : perm2(num);
     perms.forEach(p => {
         var r={number:p, v1:null, v2:null};
-        if(target==="v1") r.v1 = (p===num)?f:s; else r.v2 = (p===num)?f:s;
+        if(target==="v1") r.v1 = (p===num)?(isNaN(f)?null:f):(isNaN(s)?null:s);
+        else r.v2 = (p===num)?(isNaN(f)?null:f):(isNaN(s)?null:s);
         recordsByIndex[current].push(r);
     });
     return true;
@@ -1634,23 +1774,24 @@ if(v2Text.indexOf("/")!==-1){ if(handleSlash("v2")){ finishAdd(); return; } }
 
 var v1 = v1Text==="" ? null : parseInt(v1Text,10);
 var v2 = v2Text==="" ? null : parseInt(v2Text,10);
+if (v1 !== null && isNaN(v1)) v1 = null;
+if (v2 !== null && isNaN(v2)) v2 = null;
 recordsByIndex[current].push({number:num,v1:v1,v2:v2});
 finishAdd();
 
 function finishAdd(){
-    recalculateAutoGroups();
     document.getElementById("num").value="";
     setActiveNumberInput(document.getElementById("num"));
     renderRecords();
-    saveState();
+    recalculateAutoGroups(true);
 }
 }
 
 function deleteRecord(idx){
+if(!Array.isArray(recordsByIndex[current])) return;
 recordsByIndex[current].splice(idx,1);
-recalculateAutoGroups();
 renderRecords();
-saveState();
+recalculateAutoGroups(true);
 }
 
 function renderRecords(){
@@ -1712,14 +1853,18 @@ function handleMoveKey(){
 }
 
 function handleRound(){
-    var num = document.getElementById("num").value;
-    var v1Text = document.getElementById("v1").value;
-    var v2Text = document.getElementById("v2").value;
+    if(current===null){ alert("အရင် ကော်မရှင် နာမည်ရွေးပါ"); return; }
+    if(!Array.isArray(recordsByIndex[current])) recordsByIndex[current] = [];
+    var num = document.getElementById("num").value.trim();
+    var v1Text = document.getElementById("v1").value.trim();
+    var v2Text = document.getElementById("v2").value.trim();
     
     if(num.length < 2) return;
     
     var val1 = v1Text === "" ? null : parseInt(v1Text, 10);
     var val2 = v2Text === "" ? null : parseInt(v2Text, 10);
+    if (val1 !== null && isNaN(val1)) val1 = null;
+    if (val2 !== null && isNaN(val2)) val2 = null;
     var perms = (num.length === 3) ? getPermutationsOf3(num) : perm2(num);
     
     perms.forEach(p => {
@@ -1734,18 +1879,18 @@ function handleRound(){
         recordsByIndex[current].push(r);
     });
     
-    recalculateAutoGroups();
-    
     document.getElementById("num").value = "";
     setActiveNumberInput(document.getElementById("num"));
     renderRecords();
-    saveState();
+    recalculateAutoGroups(true);
 }
 
 /* ---------- VOUCHER ---------- */
 function makeVoucher(){
+    if(isMakingVoucher) return;
     if(current===null || (recordsByIndex[current]||[]).length===0) return;
     
+    isMakingVoucher = true;
     var rows = recordsByIndex[current];
     var buyer = document.getElementById("buyer-name").value || "Customer";
     var commName = patients[current] || "";
@@ -1753,10 +1898,10 @@ function makeVoucher(){
     var wrap = document.getElementById("voucher-preview");
     
     let rowsHTML = rows.map(r => {
-        let is2D = (r.number.toString().length === 2);
+        let is2D = (String(r.number).trim().length === 2);
         let v1_val = r.v1 ? Number(r.v1).toLocaleString() : "";
         let v1_lab = (is2D && r.v1) ? "(ပေါ်)" : "";
-        let x_sign = (r.v1 && r.v2) ? "" : "";
+        let x_sign = "";
         let v2_val = r.v2 ? Number(r.v2).toLocaleString() : "";
         let v2_lab = (is2D && r.v2) ? "(အောက်)" : "";
 
@@ -1797,7 +1942,9 @@ function makeVoucher(){
         logging: false,
         useCORS: true
     }).then(canvas => {
+        var newId = "v_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
         vouchers.unshift({
+            id: newId,
             patientIndex: current,
             img: canvas.toDataURL("image/png",0.7),
             rows: JSON.parse(JSON.stringify(rows)),
@@ -1809,18 +1956,25 @@ function makeVoucher(){
         recordsByIndex[current] = [];
         document.getElementById("buyer-name").value = "";
         renderRecords();
-        recalculateAutoGroups();
+        recalculateAutoGroups(true);
         wrap.style.display = "none";
+        isMakingVoucher = false;
         alert("ဘောင်ချာ အသစ် ထုတ်ပြီးပါပြီ။");
+    }).catch(err => {
+        console.error("Voucher render error:", err);
+        wrap.style.display = "none";
+        isMakingVoucher = false;
+        alert("ဘောင်ချာပုံ ထုတ်ရာတွင် အမှားဖြစ်သွားပါသည်။");
     });
 }
 
 function renderVouchers(list, isSent){
+    ensureVoucherIds(list);
     var box = document.getElementById(isSent ? "voucher-list-sent" : "voucher-list");
     if(!box) return; box.innerHTML="";
-    if(list.length===0){ box.innerHTML="ဘောင်ချာ မရှိသေးပါ"; return; }
+    if(list.length===0){ box.innerHTML="ဘောင်ချာ မရှိသေးပါ"; updateBtnState(isSent); return; }
     var groups={};
-    for(var i=0; i<list.length; i++){ var idx=list[i].patientIndex; if(!groups[idx]) groups[idx]=[]; groups[idx].push(i); }
+    for(var i=0; i<list.length; i++){ var idx=list[i].patientIndex; if(!groups[idx]) groups[idx]=[]; groups[idx].push(list[i]); }
     for(var p=0; p<patients.length; p++){
         if(!groups[p]) continue;
         var gdiv=document.createElement("div"); gdiv.className="voucher-group open";
@@ -1828,11 +1982,30 @@ function renderVouchers(list, isSent){
         header.style.background = isSent ? "#059669" : "#6d28d9";
         header.innerHTML = `<div class="voucher-group-title">${patients[p]} (${groups[p].length})</div>`;
         var body=document.createElement("div"); body.className="voucher-group-body"; body.style.display="block";
-        groups[p].forEach(vi => {
-            var v=list[vi], item=document.createElement("div"); item.className="voucher-item";
-            if(!isSent && selectedVoucherIndexes.includes(vi)) item.classList.add("selected");
-            item.innerHTML = `<img src="${v.img}" class="voucher-img"><button class="delete-voucher-btn" onclick="deleteSingleVoucher(${vi},${isSent})">X</button>`;
-            if(!isSent) item.onclick=function(){ toggleSelection(vi,item); };
+        groups[p].forEach(v => {
+            var item=document.createElement("div");
+            item.className="voucher-item";
+            item.dataset.vid = v.id;
+            if(!isSent && selectedVoucherIds.includes(v.id)) item.classList.add("selected");
+
+            var img = document.createElement("img");
+            img.src = v.img;
+            img.className = "voucher-img";
+
+            var delBtn = document.createElement("button");
+            delBtn.className = "delete-voucher-btn";
+            delBtn.innerText = "X";
+            delBtn.onclick = function(ev){
+                ev.stopPropagation();
+                deleteVoucherById(v.id, isSent);
+            };
+
+            item.appendChild(img);
+            item.appendChild(delBtn);
+
+            if(!isSent){
+                item.onclick=function(){ toggleSelectionById(v.id, item); };
+            }
             body.appendChild(item);
         });
         gdiv.appendChild(header); gdiv.appendChild(body); box.appendChild(gdiv);
@@ -1840,10 +2013,10 @@ function renderVouchers(list, isSent){
     updateBtnState(isSent);
 }
 
-function toggleSelection(idx,el){
-    var p = selectedVoucherIndexes.indexOf(idx);
-    if(p===-1){ selectedVoucherIndexes.push(idx); el.classList.add("selected"); }
-    else { selectedVoucherIndexes.splice(p,1); el.classList.remove("selected"); }
+function toggleSelectionById(vid, el){
+    var p = selectedVoucherIds.indexOf(vid);
+    if(p===-1){ selectedVoucherIds.push(vid); if(el) el.classList.add("selected"); }
+    else { selectedVoucherIds.splice(p,1); if(el) el.classList.remove("selected"); }
     updateBtnState(false);
 }
 
@@ -1851,33 +2024,56 @@ function updateBtnState(isSent){
     var m=document.getElementById("move-selected-btn"), s=document.getElementById("share-selected-btn");
     if(!m) return;
     if(isSent){ m.style.display=s.style.display='none'; }
-    else { m.style.display=s.style.display='flex'; m.disabled=s.disabled=(selectedVoucherIndexes.length===0); }
+    else { m.style.display=s.style.display='flex'; m.disabled=s.disabled=(selectedVoucherIds.length===0); }
 }
 
-function deleteSingleVoucher(idx,isSent){
+function deleteVoucherById(vid, isSent){
     if(!confirm("ဖျက်မလား?")) return;
-    if(isSent) sentVouchers.splice(idx,1); else vouchers.splice(idx,1);
-    recalculateAutoGroups(); renderVouchers(isSent?sentVouchers:vouchers, isSent);
+    if(isSent){
+        sentVouchers = sentVouchers.filter(v => v.id !== vid);
+        recalculateAutoGroups(true);
+        renderVouchers(sentVouchers, true);
+    } else {
+        vouchers = vouchers.filter(v => v.id !== vid);
+        selectedVoucherIds = selectedVoucherIds.filter(id => id !== vid);
+        recalculateAutoGroups(true);
+        renderVouchers(vouchers, false);
+    }
 }
 
 function moveSelectedVouchers(){
+    if (selectedVoucherIds.length === 0) return;
     if (!confirm("ရွေးချယ်ထားသော ဘောင်ချာများကို မှတ်တမ်းထဲသို့ ရွှေ့မှာ သေချာပါသလား?")) return;
-    selectedVoucherIndexes.sort((a,b)=>b-a).forEach(i => {
-        sentVouchers.unshift(vouchers.splice(i,1)[0]);
-    });
-    selectedVoucherIndexes=[]; 
-    recalculateAutoGroups(); 
+
+    var remaining = [];
+    var toMove = [];
+    for (var i = 0; i < vouchers.length; i++){
+        if (selectedVoucherIds.includes(vouchers[i].id)){
+            toMove.push(vouchers[i]);
+        } else {
+            remaining.push(vouchers[i]);
+        }
+    }
+    vouchers = remaining;
+    for (var j = toMove.length - 1; j >= 0; j--){
+        sentVouchers.unshift(toMove[j]);
+    }
+    selectedVoucherIds = [];
+    recalculateAutoGroups(true);
     renderVouchers(vouchers, false);
     alert("မှတ်တမ်းထဲသို့ အောင်မြင်စွာ ရွှေ့ပြောင်းပြီးပါပြီ။");
 }
 
 function shareSelectedVouchers(){
-    var files = selectedVoucherIndexes.map(i => {
-        var v=vouchers[i], arr=v.img.split(','), mime=arr[0].match(/:(.*?);/)[1], bstr=atob(arr[1]), n=bstr.length, u8=new Uint8Array(n);
+    var files = [];
+    for (var i = 0; i < selectedVoucherIds.length; i++){
+        var v = vouchers.find(item => item.id === selectedVoucherIds[i]);
+        if (!v || !v.img) continue;
+        var arr=v.img.split(','), mime=arr[0].match(/:(.*?);/)[1], bstr=atob(arr[1]), n=bstr.length, u8=new Uint8Array(n);
         while(n--) u8[n]=bstr.charCodeAt(n);
-        return new File([u8], "v.png", {type:mime});
-    });
-    if(navigator.share) navigator.share({files:files});
+        files.push(new File([u8], "v_" + (i + 1) + ".png", {type:mime}));
+    }
+    if(files.length > 0 && navigator.share) navigator.share({files:files}).catch(() => {});
 }
 
 function submitNumberGroups() {
@@ -2102,7 +2298,7 @@ function renderSalesSummary() {
     sentVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
         if (!summary[pName]) summary[pName] = { items: [], totalAmount: 0 };
-        let amt = parseInt(v.total.replace(/,/g, '')) || 0;
+        let amt = parseInt(String(v.total || "0").replace(/,/g, ''), 10) || 0;
         summary[pName].items.push({ buyer: v.buyerName, amount: amt, date: v.dateStr });
         summary[pName].totalAmount += amt;
     });
@@ -2173,41 +2369,22 @@ function shareTextData(text) {
 }
 
 /* ---------- WINNING CHECKER LOGIC ---------- */
-window.addEventListener('load', () => {
-    const s3d = localStorage.getItem('lastWin3D');
-    const s2dT = localStorage.getItem('lastWin2DTop');
-    const s2dB = localStorage.getItem('lastWin2DBottom');
-
-    if (s3d) { 
-        if(document.getElementById("win-3d")) {
-            document.getElementById("win-3d").value = s3d; 
-            check3DWinners(false); 
-        }
-    }
-    if (s2dT || s2dB) {
-        if(document.getElementById("win-2d-top")) {
-            document.getElementById("win-2d-top").value = s2dT || "";
-            document.getElementById("win-2d-bottom").value = s2dB || "";
-            check2DWinners(false);
-        }
-    }
-});
-
 function check3DWinners(showMsg = true) {
-    let winNum = document.getElementById("win-3d").value;
+    let winNum = String(document.getElementById("win-3d").value || "").trim();
     if (winNum.length !== 3) { if(showMsg) alert("၃ လုံးဂဏန်းရိုက်ပါ"); return; }
     
     localStorage.setItem('lastWin3D', winNum);
     let perms = getPermutationsOf3(winNum); 
     let winners = {};
-        let allVouchers = [...vouchers, ...sentVouchers];
+    let allVouchers = [...vouchers, ...sentVouchers];
 
     allVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
         if (!winners[pName]) winners[pName] = { direct: 0, toot: 0 };
-        v.rows.forEach(row => {
-            if (row.number == winNum && row.v1) winners[pName].direct += parseInt(row.v1);
-            if (perms.includes(row.number.toString()) && row.v2) winners[pName].toot += parseInt(row.v2);
+        (v.rows || []).forEach(row => {
+            let rNum = String(row.number || "").trim();
+            if (rNum === winNum && row.v1) winners[pName].direct += (parseInt(row.v1, 10) || 0);
+            if (perms.includes(rNum) && row.v2) winners[pName].toot += (parseInt(row.v2, 10) || 0);
         });
     });
 
@@ -2215,8 +2392,9 @@ function check3DWinners(showMsg = true) {
         let pName = tv.patientName || patients[tv.patientIndex] || "အမည်မသိ";
         if (!winners[pName]) winners[pName] = { direct: 0, toot: 0 };
         (tv.rows || []).forEach(row => {
-            if (row.number == winNum && row.v1) winners[pName].direct += parseInt(row.v1);
-            if (perms.includes(row.number.toString()) && row.v2) winners[pName].toot += parseInt(row.v2);
+            let rNum = String(row.number || "").trim();
+            if (rNum === winNum && row.v1) winners[pName].direct += (parseInt(row.v1, 10) || 0);
+            if (perms.includes(rNum) && row.v2) winners[pName].toot += (parseInt(row.v2, 10) || 0);
         });
     });
 
@@ -2224,21 +2402,22 @@ function check3DWinners(showMsg = true) {
 }
 
 function check2DWinners(showMsg = true) {
-    let top = document.getElementById("win-2d-top").value;
-    let bottom = document.getElementById("win-2d-bottom").value;
+    let top = String(document.getElementById("win-2d-top").value || "").trim();
+    let bottom = String(document.getElementById("win-2d-bottom").value || "").trim();
     
     localStorage.setItem('lastWin2DTop', top);
     localStorage.setItem('lastWin2DBottom', bottom);
     
     let winners = {};
-        let allVouchers = [...vouchers, ...sentVouchers];
+    let allVouchers = [...vouchers, ...sentVouchers];
 
     allVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
         if (!winners[pName]) winners[pName] = { top: 0, bottom: 0 };
-        v.rows.forEach(row => {
-            if (top && row.number == top && row.v1) winners[pName].top += parseInt(row.v1);
-            if (bottom && row.number == bottom && row.v2) winners[pName].bottom += parseInt(row.v2);
+        (v.rows || []).forEach(row => {
+            let rNum = String(row.number || "").trim();
+            if (top !== "" && rNum === top && row.v1) winners[pName].top += (parseInt(row.v1, 10) || 0);
+            if (bottom !== "" && rNum === bottom && row.v2) winners[pName].bottom += (parseInt(row.v2, 10) || 0);
         });
     });
 
@@ -2246,8 +2425,9 @@ function check2DWinners(showMsg = true) {
         let pName = tv.patientName || patients[tv.patientIndex] || "အမည်မသိ";
         if (!winners[pName]) winners[pName] = { top: 0, bottom: 0 };
         (tv.rows || []).forEach(row => {
-            if (top && row.number == top && row.v1) winners[pName].top += parseInt(row.v1);
-            if (bottom && row.number == bottom && row.v2) winners[pName].bottom += parseInt(row.v2);
+            let rNum = String(row.number || "").trim();
+            if (top !== "" && rNum === top && row.v1) winners[pName].top += (parseInt(row.v1, 10) || 0);
+            if (bottom !== "" && rNum === bottom && row.v2) winners[pName].bottom += (parseInt(row.v2, 10) || 0);
         });
     });
 
@@ -2558,10 +2738,6 @@ function showMultiImagePreviewModal(pages, groupTitle, fileNumber) {
       document.getElementById('activation-gate').style.display = 'none';
       document.getElementById('original-software-container').style.display = 'block';
   }
-
-  window.addEventListener('DOMContentLoaded', () => {
-      startAuthListener();
-  });
 </script>
 
 </body>
