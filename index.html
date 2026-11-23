@@ -2093,11 +2093,12 @@ function toggleSentView(viewType) {
 function renderSalesSummary() {
     const listDiv = document.getElementById('sales-ledger-list');
     listDiv.innerHTML = "";
-    if (sentVouchers.length === 0) {
+        if (sentVouchers.length === 0 && textVouchers.length === 0) {
         listDiv.innerHTML = "<div style='text-align:center; padding:40px; color:#94a3b8;'>ဖိုင်တွဲများ မရှိသေးပါ</div>";
         return;
     }
     let summary = {};
+
     sentVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
         if (!summary[pName]) summary[pName] = { items: [], totalAmount: 0 };
@@ -2105,6 +2106,31 @@ function renderSalesSummary() {
         summary[pName].items.push({ buyer: v.buyerName, amount: amt, date: v.dateStr });
         summary[pName].totalAmount += amt;
     });
+
+    textVouchers.forEach(tv => {
+        let pName = tv.patientName || patients[tv.patientIndex] || "အမည်မသိ";
+        if (!summary[pName]) summary[pName] = { items: [], totalAmount: 0 };
+        let tvTotal = 0;
+        if (tv.rows && tv.rows.length > 0) {
+            tv.rows.forEach(r => {
+                tvTotal += (parseFloat(r.v1) || 0) + (parseFloat(r.v2) || 0);
+            });
+        } else if (tv.content) {
+            tv.content.split('\n').forEach(line => {
+                let parts = line.split(/[\=\-\:]/);
+                if (parts.length >= 2) {
+                    tvTotal += parseFloat(parts[1].trim()) || 0;
+                }
+            });
+        }
+        summary[pName].items.push({
+            buyer: tv.groupName ? `Paste (${tv.groupName})` : "Paste စာရင်း",
+            amount: tvTotal,
+            date: tv.dateStr
+        });
+        summary[pName].totalAmount += tvTotal;
+    });
+
     for (let pName in summary) {
         let group = summary[pName];
         let folder = document.createElement('div');
@@ -2174,7 +2200,7 @@ function check3DWinners(showMsg = true) {
     localStorage.setItem('lastWin3D', winNum);
     let perms = getPermutationsOf3(winNum); 
     let winners = {};
-    let allVouchers = [...vouchers, ...sentVouchers];
+        let allVouchers = [...vouchers, ...sentVouchers];
 
     allVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
@@ -2184,6 +2210,16 @@ function check3DWinners(showMsg = true) {
             if (perms.includes(row.number.toString()) && row.v2) winners[pName].toot += parseInt(row.v2);
         });
     });
+
+    textVouchers.forEach(tv => {
+        let pName = tv.patientName || patients[tv.patientIndex] || "အမည်မသိ";
+        if (!winners[pName]) winners[pName] = { direct: 0, toot: 0 };
+        (tv.rows || []).forEach(row => {
+            if (row.number == winNum && row.v1) winners[pName].direct += parseInt(row.v1);
+            if (perms.includes(row.number.toString()) && row.v2) winners[pName].toot += parseInt(row.v2);
+        });
+    });
+
     displayStyledResults(winners, "3D", "winning-results-area-3d");
 }
 
@@ -2195,7 +2231,7 @@ function check2DWinners(showMsg = true) {
     localStorage.setItem('lastWin2DBottom', bottom);
     
     let winners = {};
-    let allVouchers = [...vouchers, ...sentVouchers];
+        let allVouchers = [...vouchers, ...sentVouchers];
 
     allVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
@@ -2205,6 +2241,16 @@ function check2DWinners(showMsg = true) {
             if (bottom && row.number == bottom && row.v2) winners[pName].bottom += parseInt(row.v2);
         });
     });
+
+    textVouchers.forEach(tv => {
+        let pName = tv.patientName || patients[tv.patientIndex] || "အမည်မသိ";
+        if (!winners[pName]) winners[pName] = { top: 0, bottom: 0 };
+        (tv.rows || []).forEach(row => {
+            if (top && row.number == top && row.v1) winners[pName].top += parseInt(row.v1);
+            if (bottom && row.number == bottom && row.v2) winners[pName].bottom += parseInt(row.v2);
+        });
+    });
+
     displayStyledResults(winners, "2D", "winning-results-area-2d");
 }
 
