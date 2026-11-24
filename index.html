@@ -2289,7 +2289,7 @@ function toggleSentView(viewType) {
 function renderSalesSummary() {
     const listDiv = document.getElementById('sales-ledger-list');
     listDiv.innerHTML = "";
-        if (sentVouchers.length === 0 && textVouchers.length === 0) {
+    if (sentVouchers.length === 0 && textVouchers.length === 0) {
         listDiv.innerHTML = "<div style='text-align:center; padding:40px; color:#94a3b8;'>ဖိုင်တွဲများ မရှိသေးပါ</div>";
         return;
     }
@@ -2298,7 +2298,16 @@ function renderSalesSummary() {
     sentVouchers.forEach(v => {
         let pName = patients[v.patientIndex] || "အမည်မသိ";
         if (!summary[pName]) summary[pName] = { items: [], totalAmount: 0 };
+
         let amt = parseInt(String(v.total || "0").replace(/,/g, ''), 10) || 0;
+        if (amt === 0 && Array.isArray(v.rows) && v.rows.length > 0) {
+            amt = v.rows.reduce((acc, r) => {
+                let v1Num = parseFloat(String(r.v1 || 0).replace(/,/g, '')) || 0;
+                let v2Num = parseFloat(String(r.v2 || 0).replace(/,/g, '')) || 0;
+                return acc + v1Num + v2Num;
+            }, 0);
+        }
+
         summary[pName].items.push({ buyer: v.buyerName, amount: amt, date: v.dateStr });
         summary[pName].totalAmount += amt;
     });
